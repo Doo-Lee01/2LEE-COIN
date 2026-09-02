@@ -378,29 +378,45 @@ const server = http.createServer(function (req, res) {
     });
   }
 
-  /* --- 일봉 차트 --------------------------------------------------- */
+  /* --- 캔들 차트 ---------------------------------------------------
+     unit: hour(1시간봉) / day(일봉) / week(주봉) / month(월봉)
+     업비트가 이 네 가지를 지원한다. */
   if (route === '/api/candles') {
     const market = parsed.searchParams.get('market') || '';
-    const count = Number(parsed.searchParams.get('count')) || 30;
+    const UNITS = {
+      hour:  { path: '/candles/minutes/60', count: 48 },
+      day:   { path: '/candles/days',       count: 30 },
+      week:  { path: '/candles/weeks',      count: 24 },
+      month: { path: '/candles/months',     count: 12 }
+    };
+    const unit = parsed.searchParams.get('unit') || 'day';
+    const spec = UNITS[unit];
+
+    if (!spec) {
+      return sendJSON(res, 400, { message: 'unit 은 hour, day, week, month 중 하나여야 합니다.' });
+    }
 
     // 사용자가 준 값을 그대로 외부 주소에 붙이면 위험하다. 형식부터 검사.
     if (!/^[A-Z]+-[A-Z0-9]+$/.test(market)) {
       return sendJSON(res, 400, { message: 'market 파라미터가 필요합니다. 예: KRW-BTC' });
     }
 
-    const key = 'candles:' + market + ':' + count;   // 코인마다 캐시를 따로 둔다
+    const count = Math.min(Number(parsed.searchParams.get('count')) || spec.count, 200);
+    const key = 'candles:' + unit + ':' + market + ':' + count;
 
     return cached(key, 60 * 1000, function (cb) {
-      console.log('[호출] 업비트 일봉', market);
-      getJSON(UPBIT + '/candles/days?market=' + market + '&count=' + count, {}, cb);
+      console.log('[호출] 업비트 캔들', unit, market);
+      getJSON(UPBIT + spec.path + '?market=' + market + '&count=' + count, {}, cb);
     }, function (err, candles) {
       if (err) return sendJSON(res, 502, { message: '차트를 불러오지 못했습니다.' });
 
       // 업비트는 최신 → 과거 순으로 준다. 그래프는 왼쪽이 과거라 뒤집는다.
-      // 화면에 필요한 두 값만 남겨서 응답을 가볍게.
-      sendJSON(res, 200, candles.slice().reverse().map(function (c) {
-        return { date: c.candle_date_time_kst.slice(0, 10), close: c.trade_price };
-      }));
+      sendJSON(res, 200, {
+        unit: unit,
+        candles: candles.slice().reverse().map(function (c) {
+          return { time: c.candle_date_time_kst, close: c.trade_price };
+        })
+      });
     });
   }
 

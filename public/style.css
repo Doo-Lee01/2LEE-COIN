@@ -55,10 +55,19 @@ body {
 }
 
 .masthead h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.masthead__mark {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
 }
 
 .masthead p {
@@ -88,25 +97,44 @@ body {
   flex-wrap: wrap;
   gap: 0.35rem 0.5rem;
   margin: 0.55rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.8125rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
-.pulse__stats li {
+.pulse__chip {
   padding: 0.2rem 0.65rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
 
-.pulse__stats b { color: var(--ink); font-weight: 600; }
-.pulse__stats .rise { color: var(--rise); border-color: #f3c4c4; background: #fff6f6; }
-.pulse__stats .fall { color: var(--fall); border-color: #c5d6ef; background: #f4f8fd; }
-.pulse__stats .rise b { color: var(--rise); }
-.pulse__stats .fall b { color: var(--fall); }
+.pulse__chip b { color: var(--ink); font-weight: 600; }
+.pulse__chip.rise { color: var(--rise); border-color: #f3c4c4; background: #fff6f6; }
+.pulse__chip.fall { color: var(--fall); border-color: #c5d6ef; background: #f4f8fd; }
+.pulse__chip.rise b { color: var(--rise); }
+.pulse__chip.fall b { color: var(--fall); }
+.pulse__chip.is-active {
+  box-shadow: 0 0 0 2px var(--ink);
+  color: var(--ink);
+}
+.pulse__chip.rise.is-active { box-shadow: 0 0 0 2px var(--rise); }
+.pulse__chip.fall.is-active { box-shadow: 0 0 0 2px var(--fall); }
+.pulse__chip:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.pulse__basis {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.pulse__basis b { color: var(--ink); font-weight: 600; }
 
 .pulse__time {
   margin: 0.15rem 0 0;
@@ -142,16 +170,37 @@ body {
   color: var(--muted);
 }
 
-.search__field { position: relative; }
+.search__field {
+  display: flex;
+  align-items: stretch;
+  gap: 0.7rem;
+}
+
+.search__input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 .search input {
   width: 100%;
-  padding: 0.65rem 6.6rem 0.65rem 0.85rem;
+  padding: 0.65rem 4.6rem 0.65rem 0.85rem;
   font: inherit;
   color: inherit;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+
+/* 검색어를 지우는 기본 X. 오른쪽 끝에서 안쪽으로 띄운다 */
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-right: 0.85rem;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 2l8 8M10 2L2 10' stroke='%236e757e' stroke-width='1.6' stroke-linecap='round'/></svg>") center / 12px 12px no-repeat;
+  cursor: pointer;
 }
 
 /* 키보드 Tab 으로 이동했을 때만 테두리를 보여준다.
@@ -163,7 +212,7 @@ body {
 
 .search__status {
   position: absolute;
-  right: 5.7rem;
+  right: 2.6rem;
   top: 50%;
   transform: translateY(-50%);
   font-size: 0.8125rem;
@@ -173,21 +222,19 @@ body {
 }
 
 .search__btn {
-  position: absolute;
-  right: 0.35rem;
-  top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.28rem;
-  padding: 0.32rem 0.6rem;
+  flex: 0 0 auto;
+  padding: 0 0.9rem;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
   color: #fff;
   background: var(--ink);
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
@@ -229,6 +276,7 @@ main {
    시세표에서 이거 하나로 안정감이 확 달라진다. */
 .board {
   width: 100%;
+  table-layout: fixed;
   background: var(--surface);
   border-collapse: collapse;
   border-radius: 8px;
@@ -264,20 +312,97 @@ main {
 .col-num,
 .col-name,
 .col-star { text-align: center; }
-.col-star { width: 2.5rem; }
+.col-star { width: 2.6rem; }
+.col-name { width: 8.8rem; }
+.col-volume { position: relative; width: 11.5rem; }
+
+.th-unit {
+  font-weight: 500;
+  color: var(--flat);
+}
+
+.th-note {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--flat);
+  white-space: nowrap;
+}
+
+.sort-arrow {
+  display: inline-block;
+  min-width: 0.7em;
+  color: var(--ink);
+  font-size: 0.7rem;
+}
+
+.help-tip-wrap { position: relative; display: inline-block; }
+
+.help-tip {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.15rem;
+  padding: 0;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+  background: #f3f5f8;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.help-tip[aria-expanded="true"] {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.help-tip__pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 7;
+  width: 16.5rem;
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  white-space: normal;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(20, 23, 28, 0.14);
+}
 
 .board tbody tr { cursor: pointer; }
 .board tbody tr:hover { background: #f7f9fb; }
 .board tbody tr.is-open { background: #eef4fb; }
 
+.board td.col-name { white-space: normal; }
+
 .name {
   display: flex;
-  gap: 0.55rem;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 0.05rem;
+  align-items: center;
   justify-content: center;
 }
-.name b { font-weight: 600; }
-.name small { color: var(--muted); font-size: 0.8125rem; }
+.name b { font-weight: 600; font-size: 0.875rem; word-break: keep-all; }
+.name small { color: var(--muted); font-size: 0.75rem; }
+
+.krw {
+  margin-left: 0.15rem;
+  font-weight: 500;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
 
 /* 국내 관례: 상승 빨강, 하락 파랑. 해외 서비스와 반대다 */
 .price { font-weight: 600; }
@@ -326,7 +451,9 @@ main {
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 10;
-  width: 20rem;
+  width: 24rem;
+  max-height: calc(100vh - 2.5rem);
+  overflow: auto;
   padding: 1.25rem;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -356,18 +483,64 @@ main {
 .detail__price small { font-size: 0.8125rem; font-weight: 500; color: var(--muted); }
 
 .detail__change {
-  margin: 0.15rem 0 0.9rem;
+  margin: 0.15rem 0 0.75rem;
   font-size: 0.9375rem;
   font-variant-numeric: tabular-nums;
 }
 
+.detail__change-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  align-items: baseline;
+}
+
+.detail__delta { font-weight: 600; }
+.detail__delta-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.detail__units {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.55rem;
+}
+
+.detail__units button {
+  flex: 1;
+  padding: 0.28rem 0.2rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: #f4f6f8;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.detail__units button.is-active {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
 .detail__chart {
-  height: 72px;
-  margin-bottom: 0.9rem;
+  min-height: 148px;
+  margin-bottom: 0.35rem;
   font-size: 0.8125rem;
   color: var(--muted);
 }
-.detail__chart svg { display: block; width: 100%; height: 72px; }
+.detail__chart svg { display: block; width: 100%; height: 148px; }
+
+.detail__chart-meta {
+  margin: 0 0 0.85rem;
+  font-size: 0.6875rem;
+  color: var(--flat);
+  line-height: 1.45;
+}
 
 .detail__facts { display: grid; gap: 0.35rem; margin: 0; }
 .detail__facts > div { display: flex; justify-content: space-between; font-size: 0.875rem; }
@@ -398,7 +571,7 @@ main {
 }
 
 .to-top.is-visible { display: inline-flex; }
-.to-top.is-shifted { right: max(22.5rem, calc((100vw - 1080px) / 2 + 21rem)); }
+.to-top.is-shifted { right: max(26.5rem, calc((100vw - 1080px) / 2 + 25rem)); }
 .to-top__arrow { font-size: 1rem; line-height: 1; }
 
 .to-top:focus-visible {
@@ -409,10 +582,30 @@ main {
 footer {
   max-width: 1080px;
   margin: 2rem auto 0;
-  padding: 0 1.25rem;
+  padding: 0 1.25rem 0.5rem;
   color: var(--flat);
   font-size: 0.8125rem;
 }
+
+.notes__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.notes {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem 0.75rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.notes li + li { margin-top: 0.35rem; }
+.notes b { color: var(--ink); font-weight: 600; }
 
 /* 좁은 화면: 시총순위 열을 숨기고 상세 패널을 바닥 시트로 */
 @media (max-width: 720px) {

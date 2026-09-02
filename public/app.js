@@ -85,8 +85,10 @@ const state = {
   sortKey: 'tradeValue24h',     // 어떤 열로 정렬 중인지
   sortDir: 'desc',              // 'asc' 오름차순 / 'desc' 내림차순
   onlyWatched: false,           // 관심코인만 보기 켜짐 여부
+  toneFilter: null,             // null=전체 / 'rise' / 'fall' / 'flat'
   watchlist: loadWatchlist(),   // 관심코인 목록 (브라우저에 저장해둔 것)
   openMarket: null,             // 상세 패널에 열려 있는 코인. 없으면 null
+  chartUnit: 'day',             // hour / day / week / month
   lastPrices: {}                // 직전 가격. 값이 바뀐 칸만 깜빡이게 하려고 기억해둔다
 };
 
@@ -112,16 +114,21 @@ const el = {
   pulse: document.getElementById('pulse'),
   pulseRise: document.getElementById('pulseRise'),
   pulseFall: document.getElementById('pulseFall'),
+  pulseFilters: document.getElementById('pulseFilters'),
   pulseCount: document.getElementById('pulseCount'),
   pulseUp: document.getElementById('pulseUp'),
   pulseDown: document.getElementById('pulseDown'),
   pulseFlat: document.getElementById('pulseFlat'),
   updatedAt: document.getElementById('updatedAt'),
+  volumeHelpBtn: document.getElementById('volumeHelpBtn'),
+  volumeHelp: document.getElementById('volumeHelp'),
   detail: document.getElementById('detail'),
   detailName: document.getElementById('detailName'),
   detailPrice: document.getElementById('detailPrice'),
   detailChange: document.getElementById('detailChange'),
+  chartUnits: document.getElementById('chartUnits'),
   detailChart: document.getElementById('detailChart'),
+  detailChartMeta: document.getElementById('detailChartMeta'),
   detailHigh: document.getElementById('detailHigh'),
   detailLow: document.getElementById('detailLow'),
   detailCap: document.getElementById('detailCap'),
@@ -216,12 +223,18 @@ function visibleCoins() {
     });
   }
 
+  if (state.toneFilter) {
+    list = list.filter(function (c) {
+      return toneOf(c.changeRate) === state.toneFilter;
+    });
+  }
+
   const key = state.sortKey;
   const dir = state.sortDir === 'asc' ? 1 : -1;   // 곱해서 방향을 뒤집는 트릭
 
   // slice() 로 복사한 뒤 정렬한다. sort() 는 원본을 바꿔버리기 때문에
   // state.coins 를 직접 정렬하면 원래 순서를 잃는다.
-  return list.slice().sort(function (a, b) {
+  const sorted = list.slice().sort(function (a, b) {
     const av = a[key];
     const bv = b[key];
 
@@ -234,6 +247,15 @@ function visibleCoins() {
 
     return (av - bv) * dir;
   });
+
+  // 관심코인은 정렬과 관계없이 목록 맨 위에 고정한다
+  const pinned = [];
+  const rest = [];
+  sorted.forEach(function (c) {
+    if (state.watchlist.indexOf(c.market) !== -1) pinned.push(c);
+    else rest.push(c);
+  });
+  return pinned.concat(rest);
 }
 
 /**
@@ -246,11 +268,16 @@ function renderRows() {
 
   // 보여줄 게 없을 때. 상황에 따라 다른 안내를 준다.
   if (!list.length) {
+    const toneMsg = {
+      rise: '상승 중인 종목이 없습니다.',
+      fall: '하락 중인 종목이 없습니다.',
+      flat: '변동 없는 종목이 없습니다.'
+    };
     const message = state.query
       ? '‘' + escapeHTML(state.query) + '’와(과) 일치하는 코인이 없습니다.'
       : state.onlyWatched
         ? '관심코인이 아직 없습니다. 목록에서 별을 눌러 추가하세요.'
-        : '표시할 코인이 없습니다.';
+        : (toneMsg[state.toneFilter] || '표시할 코인이 없습니다.');
     el.rows.innerHTML = '<tr class="placeholder"><td colspan="6">' + message + '</td></tr>';
     return;
   }
@@ -275,7 +302,8 @@ function renderRows() {
       '<td class="col-name"><span class="name"><b>' + escapeHTML(coin.koreanName) + '</b>' +
         '<small>' + escapeHTML(coin.symbol) + '</small></span></td>' +
       '<td class="col-num">' + (coin.rank ? coin.rank : '–') + '</td>' +
-      '<td class="col-num price ' + tone + tick + '">' + formatPrice(coin.price) + '</td>' +
+      '<td class="col-num price ' + tone + tick + '">' + formatPrice(coin.price) +
+        ' <small class="krw">(KRW)</small></td>' +
       '<td class="col-num ' + tone + '">' + formatRate(coin.changeRate) + '</td>' +
       '<td class="col-num">' + formatWon(coin.tradeValue24h) + '</td>' +
     '</tr>';
@@ -311,16 +339,29 @@ function renderPulse(updatedAt) {
   el.pulseDown.textContent = down;
   el.pulseFlat.textContent = flat;
   el.updatedAt.textContent = formatClock(updatedAt);
+  renderToneChips();
 }
 
 /** 정렬 중인 열 표시. aria-sort 는 화면에도 보이고 스크린리더도 읽는다. */
 function renderSortHeaders() {
   document.querySelectorAll('.board th[data-sort]').forEach(function (th) {
+    const arrow = th.querySelector('.sort-arrow');
     if (th.dataset.sort === state.sortKey) {
       th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending');
+      if (arrow) arrow.textContent = state.sortDir === 'asc' ? '▲' : '▼';
     } else {
       th.removeAttribute('aria-sort');
+      if (arrow) arrow.textContent = '';
     }
+  });
+}
+
+function renderToneChips() {
+  document.querySelectorAll('.pulse__chip').forEach(function (btn) {
+    const tone = btn.getAttribute('data-tone') || '';
+    const active = tone === '' ? !state.toneFilter : state.toneFilter === tone;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', String(active));
   });
 }
 

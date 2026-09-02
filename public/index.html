@@ -21,7 +21,13 @@
      ================================================================ -->
 <header class="masthead">
   <div class="masthead__title">
-    <h1>원화 마켓 시세판</h1>
+    <h1>
+      <svg class="masthead__mark" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14.5" fill="#14171c"/>
+        <text x="16" y="21.5" text-anchor="middle" fill="#fff" font-size="15" font-weight="700" font-family="Pretendard, sans-serif">₩</text>
+      </svg>
+      원화 마켓 시세판
+    </h1>
     <p>업비트 실시간 시세와 코인게코 시가총액 순위를 함께 봅니다.</p>
   </div>
 
@@ -31,12 +37,13 @@
       <span class="pulse__rise" id="pulseRise"></span>
       <span class="pulse__fall" id="pulseFall"></span>
     </div>
-    <ul class="pulse__stats">
-      <li>종목: <b id="pulseCount">0</b>개</li>
-      <li class="rise">상승: <b id="pulseUp">0</b>개</li>
-      <li class="fall">하락: <b id="pulseDown">0</b>개</li>
-      <li>변동 없음: <b id="pulseFlat">0</b>개</li>
-    </ul>
+    <div class="pulse__stats" id="pulseFilters">
+      <button type="button" class="pulse__chip is-active" data-tone="" aria-pressed="true">종목: <b id="pulseCount">0</b>개</button>
+      <button type="button" class="pulse__chip rise" data-tone="rise" aria-pressed="false">상승: <b id="pulseUp">0</b>개</button>
+      <button type="button" class="pulse__chip fall" data-tone="fall" aria-pressed="false">하락: <b id="pulseDown">0</b>개</button>
+      <button type="button" class="pulse__chip" data-tone="flat" aria-pressed="false">변동 없음: <b id="pulseFlat">0</b>개</button>
+    </div>
+    <p class="pulse__basis">상승·하락·변동 없음은 <b>전일 종가</b>와 비교한 결과입니다. (전일 같은 시각이 아닙니다)</p>
     <p class="pulse__time">갱신 <span id="updatedAt">–</span></p>
   </div>
 </header>
@@ -50,13 +57,15 @@
   <form class="search" id="searchForm" role="search">
     <label for="search" class="search__label">코인 검색</label>
     <div class="search__field">
-      <input
-        id="search"
-        type="search"
-        autocomplete="off"
-        placeholder="비트코인, bitcoin, BTC">
-      <!-- aria-live="polite": 내용이 바뀌면 스크린리더가 읽어준다 ('12건') -->
-      <span class="search__status" id="searchStatus" aria-live="polite"></span>
+      <div class="search__input-wrap">
+        <input
+          id="search"
+          type="search"
+          autocomplete="off"
+          placeholder="비트코인, bitcoin, BTC">
+        <!-- aria-live="polite": 내용이 바뀌면 스크린리더가 읽어준다 ('12건') -->
+        <span class="search__status" id="searchStatus" aria-live="polite"></span>
+      </div>
       <button type="submit" class="search__btn" id="searchBtn">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6.25" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -86,11 +95,21 @@
     <thead>
       <tr>
         <th class="col-star"><span class="sr-only">관심</span></th>
-        <th class="col-name" data-sort="koreanName">이름</th>
-        <th class="col-num" data-sort="rank">시총순위</th>
-        <th class="col-num" data-sort="price">현재가</th>
-        <th class="col-num" data-sort="changeRate">전일대비</th>
-        <th class="col-num" data-sort="tradeValue24h">24시간 거래대금</th>
+        <th class="col-name" data-sort="koreanName">이름 <span class="sort-arrow" aria-hidden="true"></span></th>
+        <th class="col-num" data-sort="rank">시총순위 <span class="sort-arrow" aria-hidden="true"></span></th>
+        <th class="col-num" data-sort="price">현재가 <span class="th-unit">(KRW)</span> <span class="sort-arrow" aria-hidden="true"></span></th>
+        <th class="col-num" data-sort="changeRate">전일대비 <small class="th-note">전일 종가 기준</small> <span class="sort-arrow" aria-hidden="true"></span></th>
+        <th class="col-num col-volume" data-sort="tradeValue24h">
+          24시간 거래대금
+          <span class="help-tip-wrap">
+            <button type="button" class="help-tip" id="volumeHelpBtn" aria-expanded="false" aria-controls="volumeHelp" title="설명 보기">?</button>
+            <span class="help-tip__pop" id="volumeHelp" hidden>
+              지금으로부터 최근 24시간 동안 체결된 거래 금액의 합입니다.
+              전일 하루 치가 아니라, 현재 시각 기준 24시간을 봅니다.
+            </span>
+          </span>
+          <span class="sort-arrow" aria-hidden="true"></span>
+        </th>
       </tr>
     </thead>
     <tbody id="rows">
@@ -102,14 +121,21 @@
 
 <!-- ================================================================
      상세 패널
-     행을 클릭하면 열린다. 30일 종가 그래프는 app.js 가 SVG 로 그려 넣는다.
+     행을 클릭하면 열린다. 종가 그래프는 app.js 가 SVG 로 그려 넣는다.
      ================================================================ -->
 <aside class="detail" id="detail" hidden>
   <button class="detail__close" id="detailClose" type="button">닫기</button>
   <h2 id="detailName">–</h2>
   <p class="detail__price"><span id="detailPrice">–</span> <small>KRW</small></p>
   <p class="detail__change" id="detailChange">–</p>
+  <div class="detail__units" id="chartUnits">
+    <button type="button" data-unit="hour">1시간</button>
+    <button type="button" data-unit="day" class="is-active">일</button>
+    <button type="button" data-unit="week">1주일</button>
+    <button type="button" data-unit="month">월</button>
+  </div>
   <div class="detail__chart" id="detailChart">차트를 불러오는 중입니다.</div>
+  <p class="detail__chart-meta" id="detailChartMeta"></p>
   <dl class="detail__facts">
     <div><dt>고가</dt><dd id="detailHigh">–</dd></div>
     <div><dt>저가</dt><dd id="detailLow">–</dd></div>
@@ -123,6 +149,13 @@
 </button>
 
 <footer>
+  <h2 class="notes__title">시총순위 안내</h2>
+  <ul class="notes">
+    <li>순위 출처는 CoinGecko이며, <b>원화(KRW) 시가총액이 큰 순서</b>입니다. 업비트 거래대금 순위가 아닙니다.</li>
+    <li>이 화면은 CoinGecko 시총 <b>상위 250개</b>만 받아 업비트 심볼(예: BTC)과 맞춰 붙입니다.</li>
+    <li><b>–</b> 는 순위가 없다는 뜻입니다. 250위 밖이거나, 심볼이 겹쳐 매칭되지 않았거나, CoinGecko 호출이 실패한 경우입니다.</li>
+    <li>순위 데이터는 서버에서 <b>2분마다</b> 다시 가져옵니다. 시세(현재가)는 약 5초마다 갱신됩니다.</li>
+  </ul>
   <p>시세 제공: 업비트 Open API · 시가총액: CoinGecko API · 투자 판단의 근거로 사용할 수 없습니다.</p>
 </footer>
 
