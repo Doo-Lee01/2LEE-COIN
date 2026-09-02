@@ -1,7 +1,7 @@
-'use strict';
+"use strict";
 
 /* ==================================================================
- *  원화 마켓 시세판 — 브라우저 쪽 코드
+ *  업비트 시세 대시보드 — 브라우저 쪽 코드
  * ==================================================================
  *
  *  [읽는 순서]
@@ -25,7 +25,6 @@
  *   화면 요소를 직접 하나씩 고치지 않기 때문에 머릿속이 단순해진다.
  * ================================================================== */
 
-
 /* ==================================================================
  * 1. 통신 — XHR은 전부 여기에만 있다
  * ==================================================================
@@ -42,8 +41,8 @@
 function requestJSON(url, onSuccess, onError) {
   const xhr = new XMLHttpRequest();
 
-  xhr.open('GET', url, true);       // true = 비동기. 응답을 기다리는 동안 화면이 안 멈춘다
-  xhr.responseType = 'json';        // 이걸 정하면 JSON.parse 를 안 해도 된다
+  xhr.open("GET", url, true); // true = 비동기. 응답을 기다리는 동안 화면이 안 멈춘다
+  xhr.responseType = "json"; // 이걸 정하면 JSON.parse 를 안 해도 된다
 
   // 응답이 다 왔을 때
   xhr.onload = function () {
@@ -52,13 +51,18 @@ function requestJSON(url, onSuccess, onError) {
       onSuccess(xhr.response);
     } else {
       // 서버가 { message: '...' } 형태로 이유를 알려준다
-      const message = (xhr.response && xhr.response.message) || ('응답 코드 ' + xhr.status);
+      const message =
+        (xhr.response && xhr.response.message) || "응답 코드 " + xhr.status;
       onError(new Error(message));
     }
   };
 
-  xhr.onerror = function () { onError(new Error('네트워크에 연결할 수 없습니다.')); };
-  xhr.ontimeout = function () { onError(new Error('응답이 너무 늦습니다.')); };
+  xhr.onerror = function () {
+    onError(new Error("네트워크에 연결할 수 없습니다."));
+  };
+  xhr.ontimeout = function () {
+    onError(new Error("응답이 너무 늦습니다."));
+  };
 
   // xhr.onabort 는 일부러 비워둔다.
   // 우리가 abort() 로 취소한 요청은 실패가 아니라 '이제 필요 없어진 요청'이다.
@@ -70,7 +74,6 @@ function requestJSON(url, onSuccess, onError) {
   return xhr;
 }
 
-
 /* ==================================================================
  * 2. 상태 — 화면의 모든 것은 이 객체에서 나온다
  * ==================================================================
@@ -80,75 +83,74 @@ function requestJSON(url, onSuccess, onError) {
  *  그래야 "지금 화면이 왜 이 모양이지?" 를 state 만 보면 알 수 있다.
  */
 const state = {
-  coins: [],                    // 서버에서 받은 코인 배열
-  query: '',                    // 현재 검색어
-  sortKey: 'tradeValue24h',     // 어떤 열로 정렬 중인지
-  sortDir: 'desc',              // 'asc' 오름차순 / 'desc' 내림차순
-  onlyWatched: false,           // 관심코인만 보기 켜짐 여부
-  toneFilter: null,             // null=전체 / 'rise' / 'fall' / 'flat'
-  watchlist: loadWatchlist(),   // 관심코인 목록 (브라우저에 저장해둔 것)
-  openMarket: null,             // 상세 패널에 열려 있는 코인. 없으면 null
-  chartUnit: 'day',             // hour / day / week / month
-  lastPrices: {}                // 직전 가격. 값이 바뀐 칸만 깜빡이게 하려고 기억해둔다
+  coins: [], // 서버에서 받은 코인 배열
+  query: "", // 현재 검색어
+  sortKey: "tradeValue24h", // 어떤 열로 정렬 중인지
+  sortDir: "desc", // 'asc' 오름차순 / 'desc' 내림차순
+  onlyWatched: false, // 관심코인만 보기 켜짐 여부
+  toneFilter: null, // null=전체 / 'rise' / 'fall' / 'flat'
+  watchlist: loadWatchlist(), // 관심코인 목록 (브라우저에 저장해둔 것)
+  openMarket: null, // 상세 패널에 열려 있는 코인. 없으면 null
+  chartUnit: "day", // hour / day / week / month
+  lastPrices: {}, // 직전 가격. 값이 바뀐 칸만 깜빡이게 하려고 기억해둔다
 };
 
 // 진행 중인 요청들. 새 요청을 보내기 전에 이걸 취소한다.
-let listRequest = null;    // 목록 요청
-let candleRequest = null;  // 차트 요청
+let listRequest = null; // 목록 요청
+let candleRequest = null; // 차트 요청
 
 // 타이머 두 개
-let searchTimer = null;    // 디바운싱용 (타이핑이 멈추길 기다리는 타이머)
-let pollTimer = null;      // 5초마다 갱신하는 타이머
+let searchTimer = null; // 디바운싱용 (타이핑이 멈추길 기다리는 타이머)
+let pollTimer = null; // 5초마다 갱신하는 타이머
 
 /*  화면 요소를 매번 document.getElementById 로 찾으면 느리고 지저분하다.
     시작할 때 한 번만 찾아서 el 에 모아둔다. */
 const el = {
-  rows: document.getElementById('rows'),
-  search: document.getElementById('search'),
-  searchForm: document.getElementById('searchForm'),
-  searchBtn: document.getElementById('searchBtn'),
-  searchStatus: document.getElementById('searchStatus'),
-  onlyWatched: document.getElementById('onlyWatched'),
-  toTop: document.getElementById('toTop'),
-  banner: document.getElementById('banner'),
-  pulse: document.getElementById('pulse'),
-  pulseRise: document.getElementById('pulseRise'),
-  pulseFall: document.getElementById('pulseFall'),
-  pulseFilters: document.getElementById('pulseFilters'),
-  pulseCount: document.getElementById('pulseCount'),
-  pulseUp: document.getElementById('pulseUp'),
-  pulseDown: document.getElementById('pulseDown'),
-  pulseFlat: document.getElementById('pulseFlat'),
-  updatedAt: document.getElementById('updatedAt'),
-  volumeHelpBtn: document.getElementById('volumeHelpBtn'),
-  volumeHelp: document.getElementById('volumeHelp'),
-  detail: document.getElementById('detail'),
-  detailName: document.getElementById('detailName'),
-  detailPrice: document.getElementById('detailPrice'),
-  detailChange: document.getElementById('detailChange'),
-  chartUnits: document.getElementById('chartUnits'),
-  detailChart: document.getElementById('detailChart'),
-  detailChartMeta: document.getElementById('detailChartMeta'),
-  detailHigh: document.getElementById('detailHigh'),
-  detailLow: document.getElementById('detailLow'),
-  detailCap: document.getElementById('detailCap'),
-  detailClose: document.getElementById('detailClose')
+  rows: document.getElementById("rows"),
+  search: document.getElementById("search"),
+  searchForm: document.getElementById("searchForm"),
+  searchBtn: document.getElementById("searchBtn"),
+  searchStatus: document.getElementById("searchStatus"),
+  onlyWatched: document.getElementById("onlyWatched"),
+  toTop: document.getElementById("toTop"),
+  banner: document.getElementById("banner"),
+  pulse: document.getElementById("pulse"),
+  pulseRise: document.getElementById("pulseRise"),
+  pulseFall: document.getElementById("pulseFall"),
+  pulseFilters: document.getElementById("pulseFilters"),
+  pulseCount: document.getElementById("pulseCount"),
+  pulseUp: document.getElementById("pulseUp"),
+  pulseDown: document.getElementById("pulseDown"),
+  pulseFlat: document.getElementById("pulseFlat"),
+  updatedAt: document.getElementById("updatedAt"),
+  volumeHelpBtn: document.getElementById("volumeHelpBtn"),
+  volumeHelp: document.getElementById("volumeHelp"),
+  detail: document.getElementById("detail"),
+  detailName: document.getElementById("detailName"),
+  detailPrice: document.getElementById("detailPrice"),
+  detailChange: document.getElementById("detailChange"),
+  chartUnits: document.getElementById("chartUnits"),
+  detailChart: document.getElementById("detailChart"),
+  detailChartMeta: document.getElementById("detailChartMeta"),
+  detailHigh: document.getElementById("detailHigh"),
+  detailLow: document.getElementById("detailLow"),
+  detailCap: document.getElementById("detailCap"),
+  detailClose: document.getElementById("detailClose"),
 };
 
 /*  localStorage 는 브라우저에 문자열만 저장할 수 있다.
     배열을 넣을 땐 JSON.stringify, 꺼낼 땐 JSON.parse. */
 function loadWatchlist() {
   try {
-    return JSON.parse(localStorage.getItem('watchlist')) || [];
+    return JSON.parse(localStorage.getItem("watchlist")) || [];
   } catch (e) {
-    return [];   // 저장된 값이 깨졌으면 빈 목록으로 시작
+    return []; // 저장된 값이 깨졌으면 빈 목록으로 시작
   }
 }
 
 function saveWatchlist() {
-  localStorage.setItem('watchlist', JSON.stringify(state.watchlist));
+  localStorage.setItem("watchlist", JSON.stringify(state.watchlist));
 }
-
 
 /* ==================================================================
  * 3. 표시 형식 — 숫자를 사람이 읽는 모양으로
@@ -160,37 +162,40 @@ function saveWatchlist() {
 
 /** 가격. 비트코인(1억)과 소수점 코인(0.3원)을 같은 규칙으로 못 쓴다. */
 function formatPrice(value) {
-  if (value === null || value === undefined) return '–';
-  if (value === 0) return '0';
-  if (value >= 1000) return value.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
-  if (value >= 1)    return value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
-  return value.toLocaleString('ko-KR', { maximumFractionDigits: 4 });
+  if (value === null || value === undefined) return "–";
+  if (value === 0) return "0";
+  if (value >= 1000)
+    return value.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+  if (value >= 1)
+    return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return value.toLocaleString("ko-KR", { maximumFractionDigits: 4 });
 }
 
 /** 큰 금액. 거래대금 3,482,910,000,000 은 못 읽는다. '3.5조' 로 바꾼다. */
 function formatWon(value) {
-  if (!value) return '–';
-  if (value >= 1e12) return (value / 1e12).toFixed(1) + '조';
-  if (value >= 1e8)  return Math.round(value / 1e8).toLocaleString('ko-KR') + '억';
-  return Math.round(value).toLocaleString('ko-KR');
+  if (!value) return "–";
+  if (value >= 1e12) return (value / 1e12).toFixed(1) + "조";
+  if (value >= 1e8)
+    return Math.round(value / 1e8).toLocaleString("ko-KR") + "억";
+  return Math.round(value).toLocaleString("ko-KR");
 }
 
 /** 등락률. 0.023 → '+2.30%' */
 function formatRate(rate) {
   const percent = rate * 100;
-  const sign = percent > 0 ? '+' : '';   // 음수는 '-' 가 이미 붙어 있다
-  return sign + percent.toFixed(2) + '%';
+  const sign = percent > 0 ? "+" : ""; // 음수는 '-' 가 이미 붙어 있다
+  return sign + percent.toFixed(2) + "%";
 }
 
 /** 상승/하락/보합 중 어느 색인지. CSS 클래스 이름으로 쓴다. */
 function toneOf(rate) {
-  if (rate > 0) return 'rise';   // 빨강 (국내 관례)
-  if (rate < 0) return 'fall';   // 파랑
-  return 'flat';
+  if (rate > 0) return "rise"; // 빨강 (국내 관례)
+  if (rate < 0) return "fall"; // 파랑
+  return "flat";
 }
 
 function formatClock(timestamp) {
-  return new Date(timestamp).toLocaleTimeString('ko-KR', { hour12: false });
+  return new Date(timestamp).toLocaleTimeString("ko-KR", { hour12: false });
 }
 
 /**
@@ -201,10 +206,15 @@ function formatClock(timestamp) {
  */
 function escapeHTML(text) {
   return String(text).replace(/[&<>"']/g, function (ch) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    return {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[ch];
   });
 }
-
 
 /* ==================================================================
  * 4. 그리기 — state 를 보고 화면을 만든다
@@ -231,7 +241,7 @@ function visibleCoins() {
   }
 
   const key = state.sortKey;
-  const dir = state.sortDir === 'asc' ? 1 : -1;   // 곱해서 방향을 뒤집는 트릭
+  const dir = state.sortDir === "asc" ? 1 : -1; // 곱해서 방향을 뒤집는 트릭
 
   // slice() 로 복사한 뒤 정렬한다. sort() 는 원본을 바꿔버리기 때문에
   // state.coins 를 직접 정렬하면 원래 순서를 잃는다.
@@ -240,7 +250,7 @@ function visibleCoins() {
     const bv = b[key];
 
     // 이름은 글자라서 뺄셈이 안 된다. 한글 정렬은 localeCompare 로.
-    if (typeof av === 'string') return av.localeCompare(bv, 'ko') * dir;
+    if (typeof av === "string") return av.localeCompare(bv, "ko") * dir;
 
     // 값이 없는 항목(시총 순위 미등재 등)은 방향과 상관없이 항상 뒤로 보낸다
     if (av === null || av === undefined) return 1;
@@ -270,44 +280,73 @@ function renderRows() {
   // 보여줄 게 없을 때. 상황에 따라 다른 안내를 준다.
   if (!list.length) {
     const toneMsg = {
-      rise: '상승 중인 종목이 없습니다.',
-      fall: '하락 중인 종목이 없습니다.',
-      flat: '변동 없는 종목이 없습니다.'
+      rise: "상승 중인 종목이 없습니다.",
+      fall: "하락 중인 종목이 없습니다.",
+      flat: "변동 없는 종목이 없습니다.",
     };
     const message = state.query
-      ? '‘' + escapeHTML(state.query) + '’와(과) 일치하는 코인이 없습니다.'
+      ? "‘" + escapeHTML(state.query) + "’와(과) 일치하는 코인이 없습니다."
       : state.onlyWatched
-        ? '관심코인이 아직 없습니다. 목록에서 별을 눌러 추가하세요.'
-        : (toneMsg[state.toneFilter] || '표시할 코인이 없습니다.');
-    el.rows.innerHTML = '<tr class="placeholder"><td colspan="6">' + message + '</td></tr>';
+        ? "관심코인이 아직 없습니다. 목록에서 별을 눌러 추가하세요."
+        : toneMsg[state.toneFilter] || "표시할 코인이 없습니다.";
+    el.rows.innerHTML =
+      '<tr class="placeholder"><td colspan="6">' + message + "</td></tr>";
     return;
   }
 
-  el.rows.innerHTML = list.map(function (coin) {
-    const tone = toneOf(coin.changeRate);
-    const watched = state.watchlist.indexOf(coin.market) !== -1;
+  el.rows.innerHTML = list
+    .map(function (coin) {
+      const tone = toneOf(coin.changeRate);
+      const watched = state.watchlist.indexOf(coin.market) !== -1;
 
-    // 직전 가격과 비교해서, 바뀐 칸에만 깜빡임 클래스를 붙인다.
-    // 새로 만들어진 요소에 클래스가 붙어 있으면 CSS 애니메이션이 저절로 한 번 실행된다.
-    const before = state.lastPrices[coin.market];
-    let tick = '';
-    if (before !== undefined && before !== coin.price) {
-      tick = coin.price > before ? ' tick-up' : ' tick-down';
-    }
+      // 직전 가격과 비교해서, 바뀐 칸에만 깜빡임 클래스를 붙인다.
+      // 새로 만들어진 요소에 클래스가 붙어 있으면 CSS 애니메이션이 저절로 한 번 실행된다.
+      const before = state.lastPrices[coin.market];
+      let tick = "";
+      if (before !== undefined && before !== coin.price) {
+        tick = coin.price > before ? " tick-up" : " tick-down";
+      }
 
-    // data-market 을 심어두면 나중에 클릭했을 때 어느 코인인지 알 수 있다
-    return '<tr data-market="' + coin.market + '"' +
-             (state.openMarket === coin.market ? ' class="is-open"' : '') + '>' +
-      '<td><button class="star" type="button" aria-pressed="' + watched + '"' +
-        ' aria-label="관심코인 ' + (watched ? '해제' : '추가') + '">★</button></td>' +
-      '<td class="col-name"><span class="name"><b>' + escapeHTML(coin.koreanName) + '</b>' +
-        '<small>' + escapeHTML(coin.symbol) + '</small></span></td>' +
-      '<td class="col-num">' + (coin.rank ? coin.rank : '–') + '</td>' +
-      '<td class="col-num price ' + tone + tick + '">' + formatPrice(coin.price) + '</td>' +
-      '<td class="col-num ' + tone + '">' + formatRate(coin.changeRate) + '</td>' +
-      '<td class="col-num">' + formatWon(coin.tradeValue24h) + '</td>' +
-    '</tr>';
-  }).join('');
+      // data-market 을 심어두면 나중에 클릭했을 때 어느 코인인지 알 수 있다
+      return (
+        '<tr data-market="' +
+        coin.market +
+        '"' +
+        (state.openMarket === coin.market ? ' class="is-open"' : "") +
+        ">" +
+        '<td><button class="star" type="button" aria-pressed="' +
+        watched +
+        '"' +
+        ' aria-label="관심코인 ' +
+        (watched ? "해제" : "추가") +
+        '">★</button></td>' +
+        '<td class="col-name"><span class="name"><b>' +
+        escapeHTML(coin.koreanName) +
+        "</b>" +
+        "<small>" +
+        escapeHTML(coin.symbol) +
+        "</small></span></td>" +
+        '<td class="col-num">' +
+        (coin.rank ? coin.rank : "–") +
+        "</td>" +
+        '<td class="col-num price ' +
+        tone +
+        tick +
+        '">' +
+        formatPrice(coin.price) +
+        "</td>" +
+        '<td class="col-num ' +
+        tone +
+        '">' +
+        formatRate(coin.changeRate) +
+        "</td>" +
+        '<td class="col-num">' +
+        formatWon(coin.tradeValue24h) +
+        "</td>" +
+        "</tr>"
+      );
+    })
+    .join("");
 
   // 다음 갱신 때 비교할 기준을 갱신해둔다
   list.forEach(function (coin) {
@@ -332,8 +371,8 @@ function renderPulse(updatedAt) {
   const flat = all.length - up - down;
 
   el.pulse.hidden = false;
-  el.pulseRise.style.width = (up / all.length * 100) + '%';
-  el.pulseFall.style.width = (down / all.length * 100) + '%';
+  el.pulseRise.style.width = (up / all.length) * 100 + "%";
+  el.pulseFall.style.width = (down / all.length) * 100 + "%";
   el.pulseCount.textContent = all.length;
   el.pulseUp.textContent = up;
   el.pulseDown.textContent = down;
@@ -344,24 +383,27 @@ function renderPulse(updatedAt) {
 
 /** 정렬 중인 열 표시. aria-sort 는 화면에도 보이고 스크린리더도 읽는다. */
 function renderSortHeaders() {
-  document.querySelectorAll('.board th[data-sort]').forEach(function (th) {
-    const arrow = th.querySelector('.sort-arrow');
+  document.querySelectorAll(".board th[data-sort]").forEach(function (th) {
+    const arrow = th.querySelector(".sort-arrow");
     if (th.dataset.sort === state.sortKey) {
-      th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending');
-      if (arrow) arrow.textContent = state.sortDir === 'asc' ? '▲' : '▼';
+      th.setAttribute(
+        "aria-sort",
+        state.sortDir === "asc" ? "ascending" : "descending",
+      );
+      if (arrow) arrow.textContent = state.sortDir === "asc" ? "▲" : "▼";
     } else {
-      th.removeAttribute('aria-sort');
-      if (arrow) arrow.textContent = '';
+      th.removeAttribute("aria-sort");
+      if (arrow) arrow.textContent = "";
     }
   });
 }
 
 function renderToneChips() {
-  document.querySelectorAll('.pulse__chip').forEach(function (btn) {
-    const tone = btn.getAttribute('data-tone') || '';
-    const active = tone === '' ? !state.toneFilter : state.toneFilter === tone;
-    btn.classList.toggle('is-active', active);
-    btn.setAttribute('aria-pressed', String(active));
+  document.querySelectorAll(".pulse__chip").forEach(function (btn) {
+    const tone = btn.getAttribute("data-tone") || "";
+    const active = tone === "" ? !state.toneFilter : state.toneFilter === tone;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", String(active));
   });
 }
 
@@ -373,7 +415,6 @@ function showBanner(message) {
 function hideBanner() {
   el.banner.hidden = true;
 }
-
 
 /* ==================================================================
  * 5. 불러오기 — 모든 갱신이 이 함수 하나로 모인다
@@ -395,33 +436,40 @@ function loadList() {
   // 검색어가 있으면 검색 경로로, 없으면 전체 목록 경로로.
   // encodeURIComponent 는 한글이나 &, = 같은 글자를 주소에 안전하게 넣어준다.
   const url = state.query
-    ? '/api/search?q=' + encodeURIComponent(state.query)
-    : '/api/coins';
+    ? "/api/search?q=" + encodeURIComponent(state.query)
+    : "/api/coins";
 
-  listRequest = requestJSON(url, function (data) {
-    listRequest = null;
-    hideBanner();
+  listRequest = requestJSON(
+    url,
+    function (data) {
+      listRequest = null;
+      hideBanner();
 
-    // 상태를 바꾸고 → 다시 그린다. 이 순서를 항상 지킨다.
-    state.coins = data.coins;
-    renderRows();
-    renderPulse(data.updatedAt);
+      // 상태를 바꾸고 → 다시 그린다. 이 순서를 항상 지킨다.
+      state.coins = data.coins;
+      renderRows();
+      renderPulse(data.updatedAt);
 
-    el.searchStatus.textContent = state.query ? data.coins.length + '건' : '';
+      el.searchStatus.textContent = state.query ? data.coins.length + "건" : "";
 
-    // 상세 패널이 열려 있으면 그 안의 숫자도 같이 갱신
-    if (state.openMarket) refreshDetailNumbers();
-
-  }, function (err) {
-    listRequest = null;
-    // 실패해도 화면은 그대로 둔다. 마지막에 성공한 시세가 남아 있는 게
-    // 빈 화면보다 낫고, 5초 뒤 타이머가 다시 시도한다.
-    showBanner('시세를 불러오지 못했습니다: ' + err.message + ' 잠시 후 다시 시도합니다.');
-  });
+      // 상세 패널이 열려 있으면 그 안의 숫자도 같이 갱신
+      if (state.openMarket) refreshDetailNumbers();
+    },
+    function (err) {
+      listRequest = null;
+      // 실패해도 화면은 그대로 둔다. 마지막에 성공한 시세가 남아 있는 게
+      // 빈 화면보다 낫고, 5초 뒤 타이머가 다시 시도한다.
+      showBanner(
+        "시세를 불러오지 못했습니다: " +
+          err.message +
+          " 잠시 후 다시 시도합니다.",
+      );
+    },
+  );
 }
 
 function startPolling() {
-  stopPolling();                                  // 타이머가 두 개 겹치지 않게 먼저 정리
+  stopPolling(); // 타이머가 두 개 겹치지 않게 먼저 정리
   pollTimer = setInterval(loadList, 5000);
 }
 
@@ -433,7 +481,7 @@ function stopPolling() {
 /*  사용자가 다른 탭을 보고 있는 동안에는 요청을 멈춘다.
     안 보는 화면을 갱신하려고 호출 한도를 쓸 이유가 없다.
     돌아오면 즉시 한 번 갱신하고 타이머를 다시 켠다. */
-document.addEventListener('visibilitychange', function () {
+document.addEventListener("visibilitychange", function () {
   if (document.hidden) {
     stopPolling();
   } else {
@@ -441,7 +489,6 @@ document.addEventListener('visibilitychange', function () {
     startPolling();
   }
 });
-
 
 /* ==================================================================
  * 6. 사용자 조작
@@ -459,18 +506,19 @@ function runSearch() {
   loadList();
 }
 
-el.search.addEventListener('input', function (event) {
+el.search.addEventListener("input", function (event) {
   const value = event.target.value;
-  el.searchStatus.textContent = '입력 중…';
+  el.searchStatus.textContent = "입력 중…";
 
-  clearTimeout(searchTimer);                 // 예약해둔 요청 취소
-  searchTimer = setTimeout(function () {     // 새로 예약
+  clearTimeout(searchTimer); // 예약해둔 요청 취소
+  searchTimer = setTimeout(function () {
+    // 새로 예약
     state.query = value.trim();
     loadList();
   }, 250);
 });
 
-el.searchForm.addEventListener('submit', function (event) {
+el.searchForm.addEventListener("submit", function (event) {
   event.preventDefault();
   runSearch();
 });
@@ -479,37 +527,39 @@ el.searchForm.addEventListener('submit', function (event) {
    th 6개에 각각 리스너를 붙이지 않고, 부모인 thead 에 하나만 붙인다.
    closest() 로 '클릭된 지점에서 가장 가까운 th' 를 찾는다.
    행이 계속 새로 그려지는 표에서 특히 유용한 패턴이다. */
-document.querySelector('.board thead').addEventListener('click', function (event) {
-  // ? 설명은 정렬이 아니라 도움말이다
-  if (event.target.closest('.help-tip-wrap')) return;
+document
+  .querySelector(".board thead")
+  .addEventListener("click", function (event) {
+    // ? 설명은 정렬이 아니라 도움말이다
+    if (event.target.closest(".help-tip-wrap")) return;
 
-  const th = event.target.closest('th[data-sort]');
-  if (!th) return;                           // 정렬 안 되는 열이면 무시
+    const th = event.target.closest("th[data-sort]");
+    if (!th) return; // 정렬 안 되는 열이면 무시
 
-  const key = th.dataset.sort;
+    const key = th.dataset.sort;
 
-  if (state.sortKey === key) {
-    // 같은 열을 또 눌렀다 → 방향만 뒤집는다
-    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-  } else {
-    // 다른 열을 눌렀다 → 그 열에 어울리는 기본 방향으로 시작
-    state.sortKey = key;
-    state.sortDir = (key === 'koreanName' || key === 'rank') ? 'asc' : 'desc';
-  }
+    if (state.sortKey === key) {
+      // 같은 열을 또 눌렀다 → 방향만 뒤집는다
+      state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      // 다른 열을 눌렀다 → 그 열에 어울리는 기본 방향으로 시작
+      state.sortKey = key;
+      state.sortDir = key === "koreanName" || key === "rank" ? "asc" : "desc";
+    }
 
-  renderSortHeaders();
-  renderRows();
-});
+    renderSortHeaders();
+    renderRows();
+  });
 
-el.pulseFilters.addEventListener('click', function (event) {
-  const btn = event.target.closest('.pulse__chip');
+el.pulseFilters.addEventListener("click", function (event) {
+  const btn = event.target.closest(".pulse__chip");
   if (!btn) return;
 
-  const tone = btn.getAttribute('data-tone') || '';
+  const tone = btn.getAttribute("data-tone") || "";
   if (!tone) {
-    state.toneFilter = null;                 // 종목: 전체
+    state.toneFilter = null; // 종목: 전체
   } else if (state.toneFilter === tone) {
-    state.toneFilter = null;                 // 같은 버튼을 다시 누르면 해제
+    state.toneFilter = null; // 같은 버튼을 다시 누르면 해제
   } else {
     state.toneFilter = tone;
   }
@@ -519,50 +569,51 @@ el.pulseFilters.addEventListener('click', function (event) {
 });
 
 function closeAllHelps() {
-  document.querySelectorAll('.help-tip').forEach(function (btn) {
-    btn.setAttribute('aria-expanded', 'false');
+  document.querySelectorAll(".help-tip").forEach(function (btn) {
+    btn.setAttribute("aria-expanded", "false");
   });
-  document.querySelectorAll('.help-tip__pop').forEach(function (pop) {
+  document.querySelectorAll(".help-tip__pop").forEach(function (pop) {
     pop.hidden = true;
   });
 }
 
 function toggleHelp(btn) {
-  const wrap = btn.closest('.help-tip-wrap');
+  const wrap = btn.closest(".help-tip-wrap");
   if (!wrap) return;
-  const pop = wrap.querySelector('.help-tip__pop');
-  const alreadyOpen = btn.getAttribute('aria-expanded') === 'true';
+  const pop = wrap.querySelector(".help-tip__pop");
+  const alreadyOpen = btn.getAttribute("aria-expanded") === "true";
   closeAllHelps();
   if (!alreadyOpen && pop) {
-    btn.setAttribute('aria-expanded', 'true');
+    btn.setAttribute("aria-expanded", "true");
     pop.hidden = false;
   }
 }
 
-document.addEventListener('click', function (event) {
-  const btn = event.target.closest('.help-tip');
+document.addEventListener("click", function (event) {
+  const btn = event.target.closest(".help-tip");
   if (btn) {
     event.preventDefault();
     toggleHelp(btn);
     return;
   }
-  if (!event.target.closest('.help-tip-wrap')) closeAllHelps();
+  if (!event.target.closest(".help-tip-wrap")) closeAllHelps();
 });
 
 /* --- 행 클릭: 관심코인 토글 또는 상세 열기 --------------------------
    별을 눌렀는지, 행의 다른 곳을 눌렀는지 구분해야 한다.
    별은 행 안에 있으므로 별 클릭도 행 클릭으로 잡힌다. */
-el.rows.addEventListener('click', function (event) {
-  const row = event.target.closest('tr[data-market]');
+el.rows.addEventListener("click", function (event) {
+  const row = event.target.closest("tr[data-market]");
   if (!row) return;
 
   const market = row.dataset.market;
 
   // 별을 눌렀다 → 관심코인 추가/해제만 하고 끝낸다 (상세는 안 연다)
-  if (event.target.closest('.star')) {
+  if (event.target.closest(".star")) {
     const at = state.watchlist.indexOf(market);
-    if (at === -1) state.watchlist.push(market);   // 없으면 추가
-    else state.watchlist.splice(at, 1);            // 있으면 제거
+    if (at === -1)
+      state.watchlist.push(market); // 없으면 추가
+    else state.watchlist.splice(at, 1); // 있으면 제거
     saveWatchlist();
     renderRows();
     return;
@@ -571,25 +622,25 @@ el.rows.addEventListener('click', function (event) {
   openDetail(market);
 });
 
-el.onlyWatched.addEventListener('change', function (event) {
+el.onlyWatched.addEventListener("change", function (event) {
   state.onlyWatched = event.target.checked;
   renderRows();
 });
 
-el.detailClose.addEventListener('click', closeDetail);
+el.detailClose.addEventListener("click", closeDetail);
 
 if (el.chartUnits) {
-  el.chartUnits.addEventListener('click', function (event) {
-    const btn = event.target.closest('[data-unit]');
+  el.chartUnits.addEventListener("click", function (event) {
+    const btn = event.target.closest("[data-unit]");
     if (!btn || !state.openMarket) return;
-    state.chartUnit = btn.getAttribute('data-unit');
+    state.chartUnit = btn.getAttribute("data-unit");
     loadCandles(state.openMarket);
   });
 }
 
 // 떠 있는 패널은 Esc 로 닫히는 게 기본 동작이다
-document.addEventListener('keydown', function (event) {
-  if (event.key !== 'Escape') return;
+document.addEventListener("keydown", function (event) {
+  if (event.key !== "Escape") return;
   if (document.querySelector('.help-tip[aria-expanded="true"]')) {
     closeAllHelps();
     return;
@@ -597,33 +648,34 @@ document.addEventListener('keydown', function (event) {
   closeDetail();
 });
 
-
 /* ==================================================================
  * 7. 상세 패널
  * ================================================================== */
 
 function findCoin(market) {
-  return state.coins.filter(function (c) { return c.market === market; })[0];
+  return state.coins.filter(function (c) {
+    return c.market === market;
+  })[0];
 }
 
 function openDetail(market) {
   state.openMarket = market;
-  renderRows();                 // 선택된 행에 표시가 들어가도록 다시 그린다
+  renderRows(); // 선택된 행에 표시가 들어가도록 다시 그린다
 
   el.detail.hidden = false;
   syncToTop();
-  refreshDetailNumbers();       // 숫자는 이미 있는 데이터라 즉시 보여준다
+  refreshDetailNumbers(); // 숫자는 이미 있는 데이터라 즉시 보여준다
   loadCandles(market);
 }
 
 function loadCandles(market) {
   if (candleRequest) candleRequest.abort();
-  el.detailChart.textContent = '차트를 불러오는 중입니다.';
-  if (el.detailChartMeta) el.detailChartMeta.textContent = '';
+  el.detailChart.textContent = "차트를 불러오는 중입니다.";
+  if (el.detailChartMeta) el.detailChartMeta.textContent = "";
   updateUnitButtons();
 
   candleRequest = requestJSON(
-    '/api/candles?market=' + market + '&unit=' + state.chartUnit,
+    "/api/candles?market=" + market + "&unit=" + state.chartUnit,
     function (data) {
       candleRequest = null;
       if (state.openMarket !== market) return;
@@ -632,59 +684,96 @@ function loadCandles(market) {
       const pack = Array.isArray(data)
         ? { unit: state.chartUnit, candles: data }
         : data;
-      el.detailChart.innerHTML = sparkline(pack.candles || [], pack.unit || state.chartUnit);
+      el.detailChart.innerHTML = sparkline(
+        pack.candles || [],
+        pack.unit || state.chartUnit,
+      );
     },
     function () {
       candleRequest = null;
-      el.detailChart.textContent = '차트를 불러오지 못했습니다.';
-    }
+      el.detailChart.textContent = "차트를 불러오지 못했습니다.";
+    },
   );
 }
 
 function updateUnitButtons() {
   if (!el.chartUnits) return;
-  el.chartUnits.querySelectorAll('[data-unit]').forEach(function (btn) {
-    btn.classList.toggle('is-active', btn.getAttribute('data-unit') === state.chartUnit);
+  el.chartUnits.querySelectorAll("[data-unit]").forEach(function (btn) {
+    btn.classList.toggle(
+      "is-active",
+      btn.getAttribute("data-unit") === state.chartUnit,
+    );
   });
 }
 
 /** 패널의 숫자들만 갱신. 5초마다 목록이 갱신될 때도 불린다. */
 function refreshDetailNumbers() {
   const coin = findCoin(state.openMarket);
-  if (!coin) return;            // 검색으로 걸러져서 목록에서 사라졌을 수 있다
+  if (!coin) return; // 검색으로 걸러져서 목록에서 사라졌을 수 있다
 
-  el.detailName.textContent = coin.koreanName + ' (' + coin.symbol + ')';
+  el.detailName.textContent = coin.koreanName + " (" + coin.symbol + ")";
   el.detailPrice.textContent = formatPrice(coin.price);
-  el.detailChange.textContent = formatRate(coin.changeRate) + ' (' + formatPrice(coin.changePrice) + ')';
-  el.detailChange.className = 'detail__change ' + toneOf(coin.changeRate);
+  el.detailChange.textContent =
+    formatRate(coin.changeRate) + " (" + formatPrice(coin.changePrice) + ")";
+  el.detailChange.className = "detail__change " + toneOf(coin.changeRate);
   el.detailHigh.textContent = formatPrice(coin.high);
   el.detailLow.textContent = formatPrice(coin.low);
-  el.detailCap.textContent = coin.marketCap ? formatWon(coin.marketCap) : '–';
+  el.detailCap.textContent = coin.marketCap ? formatWon(coin.marketCap) : "–";
 }
 
 function closeDetail() {
   state.openMarket = null;
   el.detail.hidden = true;
-  if (candleRequest) candleRequest.abort();   // 안 볼 차트는 받을 필요 없다
+  if (candleRequest) candleRequest.abort(); // 안 볼 차트는 받을 필요 없다
   renderRows();
   syncToTop();
 }
 
 const CHART_META = {
-  hour:  { interval: '1시간', xLabel: '시간(KST)', yLabel: '종가(KRW)', hint: '최근 48시간' },
-  day:   { interval: '1일',   xLabel: '날짜',      yLabel: '종가(KRW)', hint: '최근 30일' },
-  week:  { interval: '1주일', xLabel: '날짜',      yLabel: '종가(KRW)', hint: '최근 24주' },
-  month: { interval: '1개월', xLabel: '연월',      yLabel: '종가(KRW)', hint: '최근 12개월' }
+  hour: {
+    interval: "1시간",
+    xLabel: "시간(KST)",
+    yLabel: "종가(KRW)",
+    hint: "최근 48시간",
+  },
+  day: {
+    interval: "1일",
+    xLabel: "날짜",
+    yLabel: "종가(KRW)",
+    hint: "최근 30일",
+  },
+  week: {
+    interval: "1주일",
+    xLabel: "날짜",
+    yLabel: "종가(KRW)",
+    hint: "최근 24주",
+  },
+  month: {
+    interval: "1개월",
+    xLabel: "연월",
+    yLabel: "종가(KRW)",
+    hint: "최근 12개월",
+  },
 };
 
 function formatChartX(iso, unit) {
-  const raw = String(iso || '');
+  const raw = String(iso || "");
   const d = new Date(raw);
   if (isNaN(d.getTime())) return raw.slice(0, 10);
-  const pad = function (n) { return (n < 10 ? '0' : '') + n; };
-  if (unit === 'hour') return pad(d.getMonth() + 1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + '시';
-  if (unit === 'month') return d.getFullYear() + '.' + pad(d.getMonth() + 1);
-  return pad(d.getMonth() + 1) + '/' + pad(d.getDate());
+  const pad = function (n) {
+    return (n < 10 ? "0" : "") + n;
+  };
+  if (unit === "hour")
+    return (
+      pad(d.getMonth() + 1) +
+      "/" +
+      pad(d.getDate()) +
+      " " +
+      pad(d.getHours()) +
+      "시"
+    );
+  if (unit === "month") return d.getFullYear() + "." + pad(d.getMonth() + 1);
+  return pad(d.getMonth() + 1) + "/" + pad(d.getDate());
 }
 
 /**
@@ -692,8 +781,8 @@ function formatChartX(iso, unit) {
  * 가로축은 시간, 세로축은 종가(KRW).
  */
 function sparkline(points, unit) {
-  if (!points || points.length < 2) return '데이터가 없습니다.';
-  unit = unit || 'day';
+  if (!points || points.length < 2) return "데이터가 없습니다.";
+  unit = unit || "day";
   const meta = CHART_META[unit] || CHART_META.day;
 
   const width = 320;
@@ -702,48 +791,93 @@ function sparkline(points, unit) {
   const plotW = width - pad.l - pad.r;
   const plotH = height - pad.t - pad.b;
 
-  const values = points.map(function (p) { return p.close; });
+  const values = points.map(function (p) {
+    return p.close;
+  });
   const min = Math.min.apply(null, values);
   const max = Math.max.apply(null, values);
-  const span = (max - min) || 1;
+  const span = max - min || 1;
 
-  function xAt(i) { return pad.l + (i / (values.length - 1)) * plotW; }
-  function yAt(v) { return pad.t + (1 - (v - min) / span) * plotH; }
+  function xAt(i) {
+    return pad.l + (i / (values.length - 1)) * plotW;
+  }
+  function yAt(v) {
+    return pad.t + (1 - (v - min) / span) * plotH;
+  }
 
-  const coords = values.map(function (v, i) {
-    return xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1);
-  }).join(' ');
+  const coords = values
+    .map(function (v, i) {
+      return xAt(i).toFixed(1) + "," + yAt(v).toFixed(1);
+    })
+    .join(" ");
 
   const rising = values[values.length - 1] >= values[0];
-  const stroke = rising ? 'var(--rise)' : 'var(--fall)';
+  const stroke = rising ? "var(--rise)" : "var(--fall)";
   const yTicks = [max, (max + min) / 2, min];
   const xIdx = [0, Math.floor((values.length - 1) / 2), values.length - 1];
 
-  let grid = '';
+  let grid = "";
   yTicks.forEach(function (v) {
     const y = yAt(v);
-    grid += '<line x1="' + pad.l + '" y1="' + y.toFixed(1) + '" x2="' + (width - pad.r) +
-            '" y2="' + y.toFixed(1) + '" stroke="#e0e4ea" stroke-width="1"/>';
-    grid += '<text x="' + (pad.l - 4) + '" y="' + (y + 3).toFixed(1) +
-            '" text-anchor="end" font-size="8" fill="#6e757e">' + escapeHTML(formatPrice(v)) + '</text>';
+    grid +=
+      '<line x1="' +
+      pad.l +
+      '" y1="' +
+      y.toFixed(1) +
+      '" x2="' +
+      (width - pad.r) +
+      '" y2="' +
+      y.toFixed(1) +
+      '" stroke="#e0e4ea" stroke-width="1"/>';
+    grid +=
+      '<text x="' +
+      (pad.l - 4) +
+      '" y="' +
+      (y + 3).toFixed(1) +
+      '" text-anchor="end" font-size="8" fill="#6e757e">' +
+      escapeHTML(formatPrice(v)) +
+      "</text>";
   });
   xIdx.forEach(function (i) {
     const label = formatChartX(points[i].time || points[i].date, unit);
-    grid += '<text x="' + xAt(i).toFixed(1) + '" y="' + (height - 8) +
-            '" text-anchor="middle" font-size="8" fill="#6e757e">' + escapeHTML(label) + '</text>';
+    grid +=
+      '<text x="' +
+      xAt(i).toFixed(1) +
+      '" y="' +
+      (height - 8) +
+      '" text-anchor="middle" font-size="8" fill="#6e757e">' +
+      escapeHTML(label) +
+      "</text>";
   });
 
   if (el.detailChartMeta) {
-    el.detailChartMeta.textContent = '가로: ' + meta.xLabel + ' · 세로: ' + meta.yLabel +
-      ' · 간격: ' + meta.interval + ' · ' + meta.hint;
+    el.detailChartMeta.textContent =
+      "가로: " +
+      meta.xLabel +
+      " · 세로: " +
+      meta.yLabel +
+      " · 간격: " +
+      meta.interval +
+      " · " +
+      meta.hint;
   }
 
-  return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' +
-         escapeHTML(meta.hint + ' 종가 추이') + '">' + grid +
-         '<polyline points="' + coords + '" fill="none" stroke="' + stroke +
-         '" stroke-width="1.5" stroke-linejoin="round" /></svg>';
+  return (
+    '<svg viewBox="0 0 ' +
+    width +
+    " " +
+    height +
+    '" role="img" aria-label="' +
+    escapeHTML(meta.hint + " 종가 추이") +
+    '">' +
+    grid +
+    '<polyline points="' +
+    coords +
+    '" fill="none" stroke="' +
+    stroke +
+    '" stroke-width="1.5" stroke-linejoin="round" /></svg>'
+  );
 }
-
 
 /* ==================================================================
  * 8. 시작
@@ -752,24 +886,27 @@ function sparkline(points, unit) {
  *  정렬 표시를 맞추고, 한 번 불러오고, 5초 타이머를 켠다.
  */
 function syncStickyHeaderOffset() {
-  const toolbar = document.querySelector('.toolbar');
+  const toolbar = document.querySelector(".toolbar");
   if (!toolbar) return;
-  document.documentElement.style.setProperty('--toolbar-sticky-top', toolbar.offsetHeight + 'px');
+  document.documentElement.style.setProperty(
+    "--toolbar-sticky-top",
+    toolbar.offsetHeight + "px",
+  );
 }
 
 function syncToTop() {
   const pastOnePage = window.scrollY > window.innerHeight;
-  el.toTop.classList.toggle('is-visible', pastOnePage);
-  el.toTop.classList.toggle('is-shifted', !el.detail.hidden);
+  el.toTop.classList.toggle("is-visible", pastOnePage);
+  el.toTop.classList.toggle("is-shifted", !el.detail.hidden);
 }
 
-window.addEventListener('resize', function () {
+window.addEventListener("resize", function () {
   syncStickyHeaderOffset();
   syncToTop();
 });
-window.addEventListener('scroll', syncToTop, { passive: true });
-el.toTop.addEventListener('click', function () {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+window.addEventListener("scroll", syncToTop, { passive: true });
+el.toTop.addEventListener("click", function () {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 syncStickyHeaderOffset();
