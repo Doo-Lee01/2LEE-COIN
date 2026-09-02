@@ -1,0 +1,429 @@
+/* ==================================================================
+   색·간격 같은 값을 변수로 모아둔다.
+   나중에 '상승 색을 바꾸고 싶다' 하면 여기 한 줄만 고치면
+   표·요약막대·그래프가 전부 같이 바뀐다.
+   ================================================================== */
+:root {
+  --paper: #eef0f3;
+  --surface: #ffffff;
+  --ink: #14171c;
+  --muted: #6e757e;
+  --line: #e0e4ea;
+  --rise: #d62b2b;   /* 국내 관례: 상승 빨강 */
+  --fall: #1560c4;   /* 하락 파랑 */
+  --flat: #8b929b;
+  --toolbar-sticky-top: 5.9rem; /* 검색창 높이. app.js 가 실측값으로 덮어쓴다 */
+}
+
+/* padding 과 border 를 width 안에 포함시킨다.
+   이게 없으면 width:100% 인 입력창에 padding 을 주는 순간 화면 밖으로 삐져나간다. */
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0 0 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+               'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* 눈에는 안 보이지만 스크린리더는 읽는 글자.
+   display:none 을 쓰면 스크린리더도 못 읽으므로 이렇게 숨긴다. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---------- 머리말 + 시장 요약 ---------- */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 1.25rem;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.masthead p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.pulse { min-width: 16rem; }
+
+/* 상승/하락 비율 막대. 두 span 의 width 를 app.js 가 %로 바꾼다.
+   transition 덕분에 비율이 바뀔 때 부드럽게 움직인다. */
+.pulse__bar {
+  display: flex;
+  height: 5px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.pulse__rise { background: var(--rise); }
+.pulse__fall { background: var(--fall); }
+.pulse__rise, .pulse__fall { transition: width 0.5s ease; }
+
+.pulse__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse__stats li {
+  padding: 0.2rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.pulse__stats b { color: var(--ink); font-weight: 600; }
+.pulse__stats .rise { color: var(--rise); border-color: #f3c4c4; background: #fff6f6; }
+.pulse__stats .fall { color: var(--fall); border-color: #c5d6ef; background: #f4f8fd; }
+.pulse__stats .rise b { color: var(--rise); }
+.pulse__stats .fall b { color: var(--fall); }
+
+.pulse__time {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--flat);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 검색 / 필터 ---------- */
+
+/* position: sticky — 스크롤해도 검색창이 위에 붙어 있는다.
+   표가 길어서 아래로 내려가도 검색을 할 수 있어야 한다. */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0.75rem 1.25rem;
+  background: var(--paper);
+}
+
+.search { position: relative; flex: 1 1 18rem; }
+
+.search__label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.search__field { position: relative; }
+
+.search input {
+  width: 100%;
+  padding: 0.65rem 6.6rem 0.65rem 0.85rem;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+/* 키보드 Tab 으로 이동했을 때만 테두리를 보여준다.
+   outline 을 그냥 none 으로 지우면 키보드 사용자가 길을 잃는다. */
+.search input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.search__status {
+  position: absolute;
+  right: 5.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.search__btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.32rem 0.6rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search__btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding-top: 1.1rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.banner {
+  max-width: 1080px;
+  margin: 0 auto 0.5rem;
+  padding: 0.7rem 1rem;
+  background: #fff4f4;
+  border-left: 3px solid var(--rise);
+  color: #8c1f1f;
+  font-size: 0.875rem;
+}
+
+/* ---------- 시세표 ---------- */
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+/* font-variant-numeric: tabular-nums 가 핵심.
+   숫자 폭을 모두 같게 만들어서 5초마다 값이 바뀌어도 자릿수가 흔들리지 않는다.
+   시세표에서 이거 하나로 안정감이 확 달라진다. */
+.board {
+  width: 100%;
+  background: var(--surface);
+  border-collapse: collapse;
+  border-radius: 8px;
+  /* overflow:hidden 을 두면 표가 sticky 기준이 된다.
+     그때 thead 의 top 값이 뷰포트가 아니라 표 꼭대기에서 헤더를 밀어내려
+     첫 행이 컬럼명 위에 올라온다. */
+  font-variant-numeric: tabular-nums;
+}
+
+.board th,
+.board td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 헤더도 sticky. top 은 검색창(.toolbar) 높이에 맞춰 그 바로 아래에 붙인다 */
+.board thead th {
+  position: sticky;
+  top: var(--toolbar-sticky-top);
+  z-index: 4;
+  background: var(--surface);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.board th[data-sort] { cursor: pointer; user-select: none; }
+.board th[data-sort]:hover { color: var(--ink); }
+.board th[aria-sort] { color: var(--ink); font-weight: 600; }
+
+.col-num,
+.col-name,
+.col-star { text-align: center; }
+.col-star { width: 2.5rem; }
+
+.board tbody tr { cursor: pointer; }
+.board tbody tr:hover { background: #f7f9fb; }
+.board tbody tr.is-open { background: #eef4fb; }
+
+.name {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  justify-content: center;
+}
+.name b { font-weight: 600; }
+.name small { color: var(--muted); font-size: 0.8125rem; }
+
+/* 국내 관례: 상승 빨강, 하락 파랑. 해외 서비스와 반대다 */
+.price { font-weight: 600; }
+.rise { color: var(--rise); }
+.fall { color: var(--fall); }
+.flat { color: var(--flat); }
+
+.star {
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--line);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.star[aria-pressed="true"] { color: #f0a500; }
+
+.placeholder td {
+  padding: 3rem 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 값이 바뀐 칸만 잠깐 물들이기 */
+/* 값이 바뀐 칸만 잠깐 물들였다가 사라진다.
+   renderRows() 가 새로 만든 요소에 tick-up/tick-down 클래스를 붙이면
+   요소가 화면에 들어오는 순간 애니메이션이 한 번 실행된다. */
+@keyframes tick-rise {
+  from { background: rgba(214, 43, 43, 0.18); }
+  to   { background: transparent; }
+}
+@keyframes tick-fall {
+  from { background: rgba(21, 96, 196, 0.18); }
+  to   { background: transparent; }
+}
+.tick-up { animation: tick-rise 0.7s ease-out; }
+.tick-down { animation: tick-fall 0.7s ease-out; }
+
+/* ---------- 상세 패널 ---------- */
+
+/* 상세 패널. 데스크톱에서는 우하단에 뜨고,
+   아래 미디어쿼리에서 모바일일 때 화면 아래에 꽉 차게 바뀐다. */
+.detail {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 10;
+  width: 20rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(20, 23, 28, 0.14);
+}
+
+.detail h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; }
+
+.detail__close {
+  float: right;
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.detail__price {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.detail__price small { font-size: 0.8125rem; font-weight: 500; color: var(--muted); }
+
+.detail__change {
+  margin: 0.15rem 0 0.9rem;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail__chart {
+  height: 72px;
+  margin-bottom: 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.detail__chart svg { display: block; width: 100%; height: 72px; }
+
+.detail__facts { display: grid; gap: 0.35rem; margin: 0; }
+.detail__facts > div { display: flex; justify-content: space-between; font-size: 0.875rem; }
+.detail__facts dt { color: var(--muted); }
+.detail__facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.to-top {
+  display: none;
+  position: fixed;
+  /* 표(최대 1080px) 오른쪽 끝에 붙인다. 넓은 모니터에서 화면 끝으로 밀리지 않게 */
+  right: max(1.25rem, calc((100vw - 1080px) / 2));
+  bottom: 1.25rem;
+  z-index: 8;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 3.4rem;
+  padding: 0.55rem 0.45rem 0.5rem;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(20, 23, 28, 0.18);
+  cursor: pointer;
+}
+
+.to-top.is-visible { display: inline-flex; }
+.to-top.is-shifted { right: max(22.5rem, calc((100vw - 1080px) / 2 + 21rem)); }
+.to-top__arrow { font-size: 1rem; line-height: 1; }
+
+.to-top:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+footer {
+  max-width: 1080px;
+  margin: 2rem auto 0;
+  padding: 0 1.25rem;
+  color: var(--flat);
+  font-size: 0.8125rem;
+}
+
+/* 좁은 화면: 시총순위 열을 숨기고 상세 패널을 바닥 시트로 */
+@media (max-width: 720px) {
+  .board .col-cap, .board thead th:nth-child(3), .board tbody td:nth-child(3) { display: none; }
+  .detail { right: 0; bottom: 0; left: 0; width: auto; border-radius: 12px 12px 0 0; }
+  :root { --toolbar-sticky-top: 7.25rem; }
+  .to-top.is-shifted { right: 1.25rem; bottom: 14rem; }
+}
+
+/* 사용자가 기기 설정에서 '동작 줄이기'를 켰다면 애니메이션을 끈다.
+   어지럼증이 있는 사람에게 깜빡임은 불편할 수 있다. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

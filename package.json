@@ -1,0 +1,10 @@
+{
+  "name": "dashboard",
+  "version": "1.0.0",
+  "description": "원화 마켓 시세판 — 업비트 + 코인게코",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "ISC"
+}
