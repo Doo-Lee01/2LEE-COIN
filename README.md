@@ -1,4 +1,4 @@
-# 원화 마켓 시세판
+# [Fix] 업비트 시세 대시보드로 명칭 변경
 
 업비트 실시간 시세 + 코인게코 시가총액 순위를 한 화면에 보여주는 대시보드입니다.
 외부 패키지 없이 Node 내장 모듈과 순수 JS만 사용합니다.
@@ -27,11 +27,11 @@ public/app.js      클라이언트 로직 (XHR)
 
 ## 서버가 하는 일
 
-| 라우트 | 외부 API | 캐시 |
-|---|---|---|
-| `GET /api/coins` | 업비트 `/v1/market/all` + `/v1/ticker/all` + 코인게코 `/coins/markets` | 4초 / 12시간 / 120초 |
-| `GET /api/search?q=` | 위와 동일 (캐시된 결과를 서버에서 필터링) | – |
-| `GET /api/candles?market=KRW-BTC` | 업비트 `/v1/candles/days` | 60초 |
+| 라우트                            | 외부 API                                                               | 캐시                 |
+| --------------------------------- | ---------------------------------------------------------------------- | -------------------- |
+| `GET /api/coins`                  | 업비트 `/v1/market/all` + `/v1/ticker/all` + 코인게코 `/coins/markets` | 4초 / 12시간 / 120초 |
+| `GET /api/search?q=`              | 위와 동일 (캐시된 결과를 서버에서 필터링)                              | –                    |
+| `GET /api/candles?market=KRW-BTC` | 업비트 `/v1/candles/days`                                              | 60초                 |
 
 **브라우저에서 업비트를 직접 부르지 않는 이유**: 업비트는 Origin 헤더가 붙은 요청(브라우저의
 XHR/fetch가 자동으로 붙입니다)에 대해 시세 조회 API를 10초당 1회만 허용합니다.
@@ -39,7 +39,7 @@ XHR/fetch가 자동으로 붙입니다)에 대해 시세 조회 API를 10초당 
 
 ## 구현된 것
 
-- 원화 마켓 전체 시세, 5초 폴링
+- 업비트 암호화폐 전체 시세, 5초 폴링
 - 상승/하락 종목 수 요약 바
 - 검색: 디바운싱 250ms + 이전 요청 취소, 한글·영문·심볼 모두 매칭
 - 정렬: 이름 / 시총순위 / 현재가 / 등락률 / 거래대금 (헤더 클릭)
@@ -60,7 +60,7 @@ XHR/fetch가 자동으로 붙입니다)에 대해 시세 조회 API를 10초당 
 지금은 콜백 2개를 받습니다.
 
 ```js
-requestJSON(url, onSuccess, onError);  // XMLHttpRequest 를 반환
+requestJSON(url, onSuccess, onError); // XMLHttpRequest 를 반환
 ```
 
 이걸 이렇게 바꿉니다.
@@ -70,7 +70,7 @@ function requestJSON(url, signal) {
   return fetch(url, { signal }).then(function (res) {
     if (!res.ok) {
       return res.json().then(function (body) {
-        throw new Error(body.message || '응답 코드 ' + res.status);
+        throw new Error(body.message || "응답 코드 " + res.status);
       });
     }
     return res.json();
@@ -87,7 +87,9 @@ function loadList() {
   if (controller) controller.abort();
   controller = new AbortController();
 
-  const url = state.query ? '/api/search?q=' + encodeURIComponent(state.query) : '/api/coins';
+  const url = state.query
+    ? "/api/search?q=" + encodeURIComponent(state.query)
+    : "/api/coins";
 
   requestJSON(url, controller.signal)
     .then(function (data) {
@@ -97,8 +99,8 @@ function loadList() {
       renderPulse(data.updatedAt);
     })
     .catch(function (err) {
-      if (err.name === 'AbortError') return;  // 우리가 취소한 건 무시
-      showBanner('시세를 불러오지 못했습니다: ' + err.message);
+      if (err.name === "AbortError") return; // 우리가 취소한 건 무시
+      showBanner("시세를 불러오지 못했습니다: " + err.message);
     });
 }
 ```
@@ -128,13 +130,16 @@ async function loadList() {
 ```js
 const cachedP = (key, ttl, loader) =>
   new Promise((resolve, reject) =>
-    cached(key, ttl, loader, (err, data) => (err ? reject(err) : resolve(data))));
+    cached(key, ttl, loader, (err, data) =>
+      err ? reject(err) : resolve(data),
+    ),
+  );
 
 async function loadCoins() {
   const [markets, tickers, rankings] = await Promise.all([
-    cachedP('markets', 12 * 60 * 60 * 1000, loadMarkets),
-    cachedP('tickers', 4 * 1000, loadTickers),
-    cachedP('rankings', 120 * 1000, loadRankings).catch(() => []) // 순위는 없어도 진행
+    cachedP("markets", 12 * 60 * 60 * 1000, loadMarkets),
+    cachedP("tickers", 4 * 1000, loadTickers),
+    cachedP("rankings", 120 * 1000, loadRankings).catch(() => []), // 순위는 없어도 진행
   ]);
   return mergeCoins(markets, tickers, rankings);
 }
