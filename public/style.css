@@ -314,7 +314,9 @@ main {
 .col-star { text-align: center; }
 .col-star { width: 2.6rem; }
 .col-name { width: 8.8rem; }
-.col-volume { position: relative; width: 11.5rem; }
+.col-volume,
+.col-change { position: relative; }
+.col-volume { width: 11.5rem; }
 
 .th-unit {
   font-weight: 500;
@@ -379,6 +381,15 @@ main {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 10px 24px rgba(20, 23, 28, 0.14);
+}
+
+.help-tip__pop b { font-weight: 600; }
+
+.col-change .help-tip__pop {
+  right: auto;
+  left: 50%;
+  width: 18rem;
+  transform: translateX(-50%);
 }
 
 .board tbody tr { cursor: pointer; }

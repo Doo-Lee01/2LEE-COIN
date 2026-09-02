@@ -98,7 +98,18 @@
         <th class="col-name" data-sort="koreanName">이름 <span class="sort-arrow" aria-hidden="true"></span></th>
         <th class="col-num" data-sort="rank">시총순위 <span class="sort-arrow" aria-hidden="true"></span></th>
         <th class="col-num" data-sort="price">현재가 <span class="th-unit">(KRW)</span> <span class="sort-arrow" aria-hidden="true"></span></th>
-        <th class="col-num" data-sort="changeRate">전일대비 <small class="th-note">전일 종가 기준</small> <span class="sort-arrow" aria-hidden="true"></span></th>
+        <th class="col-num col-change" data-sort="changeRate">
+          전일대비
+          <span class="help-tip-wrap">
+            <button type="button" class="help-tip" aria-expanded="false" aria-controls="changeHelp" title="설명 보기">?</button>
+            <span class="help-tip__pop" id="changeHelp" hidden>
+              전일대비는 <b>전일 종가</b>와 비교한 등락입니다. 어제 같은 시각의 가격이 아닙니다.
+              업비트 원화 마켓의 하루는 한국 시간 <b>오전 9시</b>에 바뀝니다.
+              전일 종가는 오늘 오전 9시 직전 가격, 즉 어제 오전 9시부터 오늘 오전 8시 59분까지 마지막으로 체결된 가격입니다.
+            </span>
+          </span>
+          <span class="sort-arrow" aria-hidden="true"></span>
+        </th>
         <th class="col-num col-volume" data-sort="tradeValue24h">
           24시간 거래대금
           <span class="help-tip-wrap">

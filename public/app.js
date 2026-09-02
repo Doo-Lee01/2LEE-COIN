@@ -302,8 +302,7 @@ function renderRows() {
       '<td class="col-name"><span class="name"><b>' + escapeHTML(coin.koreanName) + '</b>' +
         '<small>' + escapeHTML(coin.symbol) + '</small></span></td>' +
       '<td class="col-num">' + (coin.rank ? coin.rank : '–') + '</td>' +
-      '<td class="col-num price ' + tone + tick + '">' + formatPrice(coin.price) +
-        ' <small class="krw">(KRW)</small></td>' +
+      '<td class="col-num price ' + tone + tick + '">' + formatPrice(coin.price) + '</td>' +
       '<td class="col-num ' + tone + '">' + formatRate(coin.changeRate) + '</td>' +
       '<td class="col-num">' + formatWon(coin.tradeValue24h) + '</td>' +
     '</tr>';
@@ -480,6 +479,9 @@ el.searchForm.addEventListener('submit', function (event) {
    closest() 로 '클릭된 지점에서 가장 가까운 th' 를 찾는다.
    행이 계속 새로 그려지는 표에서 특히 유용한 패턴이다. */
 document.querySelector('.board thead').addEventListener('click', function (event) {
+  // ? 설명은 정렬이 아니라 도움말이다
+  if (event.target.closest('.help-tip-wrap')) return;
+
   const th = event.target.closest('th[data-sort]');
   if (!th) return;                           // 정렬 안 되는 열이면 무시
 
@@ -496,6 +498,54 @@ document.querySelector('.board thead').addEventListener('click', function (event
 
   renderSortHeaders();
   renderRows();
+});
+
+el.pulseFilters.addEventListener('click', function (event) {
+  const btn = event.target.closest('.pulse__chip');
+  if (!btn) return;
+
+  const tone = btn.getAttribute('data-tone') || '';
+  if (!tone) {
+    state.toneFilter = null;                 // 종목: 전체
+  } else if (state.toneFilter === tone) {
+    state.toneFilter = null;                 // 같은 버튼을 다시 누르면 해제
+  } else {
+    state.toneFilter = tone;
+  }
+
+  renderToneChips();
+  renderRows();
+});
+
+function closeAllHelps() {
+  document.querySelectorAll('.help-tip').forEach(function (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+  });
+  document.querySelectorAll('.help-tip__pop').forEach(function (pop) {
+    pop.hidden = true;
+  });
+}
+
+function toggleHelp(btn) {
+  const wrap = btn.closest('.help-tip-wrap');
+  if (!wrap) return;
+  const pop = wrap.querySelector('.help-tip__pop');
+  const alreadyOpen = btn.getAttribute('aria-expanded') === 'true';
+  closeAllHelps();
+  if (!alreadyOpen && pop) {
+    btn.setAttribute('aria-expanded', 'true');
+    pop.hidden = false;
+  }
+}
+
+document.addEventListener('click', function (event) {
+  const btn = event.target.closest('.help-tip');
+  if (btn) {
+    event.preventDefault();
+    toggleHelp(btn);
+    return;
+  }
+  if (!event.target.closest('.help-tip-wrap')) closeAllHelps();
 });
 
 /* --- 행 클릭: 관심코인 토글 또는 상세 열기 --------------------------
@@ -529,7 +579,12 @@ el.detailClose.addEventListener('click', closeDetail);
 
 // 떠 있는 패널은 Esc 로 닫히는 게 기본 동작이다
 document.addEventListener('keydown', function (event) {
-  if (event.key === 'Escape') closeDetail();
+  if (event.key !== 'Escape') return;
+  if (document.querySelector('.help-tip[aria-expanded="true"]')) {
+    closeAllHelps();
+    return;
+  }
+  closeDetail();
 });
 
 
