@@ -161,6 +161,7 @@ function saveWatchlist() {
 /** 가격. 비트코인(1억)과 소수점 코인(0.3원)을 같은 규칙으로 못 쓴다. */
 function formatPrice(value) {
   if (value === null || value === undefined) return '–';
+  if (value === 0) return '0';
   if (value >= 1000) return value.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
   if (value >= 1)    return value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
   return value.toLocaleString('ko-KR', { maximumFractionDigits: 4 });
@@ -577,6 +578,15 @@ el.onlyWatched.addEventListener('change', function (event) {
 
 el.detailClose.addEventListener('click', closeDetail);
 
+if (el.chartUnits) {
+  el.chartUnits.addEventListener('click', function (event) {
+    const btn = event.target.closest('[data-unit]');
+    if (!btn || !state.openMarket) return;
+    state.chartUnit = btn.getAttribute('data-unit');
+    loadCandles(state.openMarket);
+  });
+}
+
 // 떠 있는 패널은 Esc 로 닫히는 게 기본 동작이다
 document.addEventListener('keydown', function (event) {
   if (event.key !== 'Escape') return;
@@ -602,23 +612,39 @@ function openDetail(market) {
 
   el.detail.hidden = false;
   syncToTop();
-  el.detailChart.textContent = '차트를 불러오는 중입니다.';
   refreshDetailNumbers();       // 숫자는 이미 있는 데이터라 즉시 보여준다
+  loadCandles(market);
+}
 
-  // 차트만 따로 요청한다. 여기도 이전 요청을 취소한다.
+function loadCandles(market) {
   if (candleRequest) candleRequest.abort();
+  el.detailChart.textContent = '차트를 불러오는 중입니다.';
+  if (el.detailChartMeta) el.detailChartMeta.textContent = '';
+  updateUnitButtons();
 
-  candleRequest = requestJSON('/api/candles?market=' + market + '&count=30', function (candles) {
-    candleRequest = null;
+  candleRequest = requestJSON(
+    '/api/candles?market=' + market + '&unit=' + state.chartUnit,
+    function (data) {
+      candleRequest = null;
+      if (state.openMarket !== market) return;
 
-    // 응답을 기다리는 동안 사용자가 다른 코인을 열었을 수 있다.
-    // 그럼 이 응답은 버려야 한다. abort 와 함께 쓰는 이중 안전장치.
-    if (state.openMarket !== market) return;
+      // 서버는 { unit, candles } 객체로 준다. 예전 배열 응답도 받아준다.
+      const pack = Array.isArray(data)
+        ? { unit: state.chartUnit, candles: data }
+        : data;
+      el.detailChart.innerHTML = sparkline(pack.candles || [], pack.unit || state.chartUnit);
+    },
+    function () {
+      candleRequest = null;
+      el.detailChart.textContent = '차트를 불러오지 못했습니다.';
+    }
+  );
+}
 
-    el.detailChart.innerHTML = sparkline(candles);
-  }, function () {
-    candleRequest = null;
-    el.detailChart.textContent = '차트를 불러오지 못했습니다.';
+function updateUnitButtons() {
+  if (!el.chartUnits) return;
+  el.chartUnits.querySelectorAll('[data-unit]').forEach(function (btn) {
+    btn.classList.toggle('is-active', btn.getAttribute('data-unit') === state.chartUnit);
   });
 }
 
@@ -629,7 +655,7 @@ function refreshDetailNumbers() {
 
   el.detailName.textContent = coin.koreanName + ' (' + coin.symbol + ')';
   el.detailPrice.textContent = formatPrice(coin.price);
-  el.detailChange.textContent = formatRate(coin.changeRate) + '  ' + formatPrice(coin.changePrice);
+  el.detailChange.textContent = formatRate(coin.changeRate) + ' (' + formatPrice(coin.changePrice) + ')';
   el.detailChange.className = 'detail__change ' + toneOf(coin.changeRate);
   el.detailHigh.textContent = formatPrice(coin.high);
   el.detailLow.textContent = formatPrice(coin.low);
@@ -644,40 +670,76 @@ function closeDetail() {
   syncToTop();
 }
 
-/**
- * 30일 종가를 선 하나로 그린다.
- *
- * 차트 라이브러리 없이 SVG 로 직접 그린다. 원리는 간단하다.
- *  1. 30개 값 중 최소·최대를 찾는다
- *  2. 각 값을 0~1 사이 비율로 바꾼다        (v - min) / (max - min)
- *  3. 그 비율을 그림의 높이에 대응시킨다
- *  4. 점들을 polyline 으로 잇는다
- *
- * 주의: SVG 는 y가 아래로 갈수록 커진다. 그래서 height 에서 빼야 위가 높은 값이 된다.
- */
-function sparkline(points) {
-  if (!points || points.length < 2) return '데이터가 없습니다.';
+const CHART_META = {
+  hour:  { interval: '1시간', xLabel: '시간(KST)', yLabel: '종가(KRW)', hint: '최근 48시간' },
+  day:   { interval: '1일',   xLabel: '날짜',      yLabel: '종가(KRW)', hint: '최근 30일' },
+  week:  { interval: '1주일', xLabel: '날짜',      yLabel: '종가(KRW)', hint: '최근 24주' },
+  month: { interval: '1개월', xLabel: '연월',      yLabel: '종가(KRW)', hint: '최근 12개월' }
+};
 
-  const width = 260;
-  const height = 72;
+function formatChartX(iso, unit) {
+  const raw = String(iso || '');
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw.slice(0, 10);
+  const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  if (unit === 'hour') return pad(d.getMonth() + 1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + '시';
+  if (unit === 'month') return d.getFullYear() + '.' + pad(d.getMonth() + 1);
+  return pad(d.getMonth() + 1) + '/' + pad(d.getDate());
+}
+
+/**
+ * 종가를 선 하나로 그린다. 왼쪽이 과거, 오른쪽이 최근.
+ * 가로축은 시간, 세로축은 종가(KRW).
+ */
+function sparkline(points, unit) {
+  if (!points || points.length < 2) return '데이터가 없습니다.';
+  unit = unit || 'day';
+  const meta = CHART_META[unit] || CHART_META.day;
+
+  const width = 320;
+  const height = 148;
+  const pad = { l: 52, r: 10, t: 10, b: 28 };
+  const plotW = width - pad.l - pad.r;
+  const plotH = height - pad.t - pad.b;
 
   const values = points.map(function (p) { return p.close; });
   const min = Math.min.apply(null, values);
   const max = Math.max.apply(null, values);
-  const span = (max - min) || 1;    // 값이 전부 같으면 0으로 나누게 되므로 1로 막는다
+  const span = (max - min) || 1;
+
+  function xAt(i) { return pad.l + (i / (values.length - 1)) * plotW; }
+  function yAt(v) { return pad.t + (1 - (v - min) / span) * plotH; }
 
   const coords = values.map(function (v, i) {
-    const x = (i / (values.length - 1)) * width;               // 가로: 순서대로 균등하게
-    const y = height - ((v - min) / span) * (height - 8) - 4;  // 세로: 위아래 4px씩 여백
-    return x.toFixed(1) + ',' + y.toFixed(1);
+    return xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1);
   }).join(' ');
 
-  // 30일 전보다 올랐으면 빨강, 내렸으면 파랑
   const rising = values[values.length - 1] >= values[0];
   const stroke = rising ? 'var(--rise)' : 'var(--fall)';
+  const yTicks = [max, (max + min) / 2, min];
+  const xIdx = [0, Math.floor((values.length - 1) / 2), values.length - 1];
 
-  return '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" role="img"' +
-         ' aria-label="최근 30일 종가 추이">' +
+  let grid = '';
+  yTicks.forEach(function (v) {
+    const y = yAt(v);
+    grid += '<line x1="' + pad.l + '" y1="' + y.toFixed(1) + '" x2="' + (width - pad.r) +
+            '" y2="' + y.toFixed(1) + '" stroke="#e0e4ea" stroke-width="1"/>';
+    grid += '<text x="' + (pad.l - 4) + '" y="' + (y + 3).toFixed(1) +
+            '" text-anchor="end" font-size="8" fill="#6e757e">' + escapeHTML(formatPrice(v)) + '</text>';
+  });
+  xIdx.forEach(function (i) {
+    const label = formatChartX(points[i].time || points[i].date, unit);
+    grid += '<text x="' + xAt(i).toFixed(1) + '" y="' + (height - 8) +
+            '" text-anchor="middle" font-size="8" fill="#6e757e">' + escapeHTML(label) + '</text>';
+  });
+
+  if (el.detailChartMeta) {
+    el.detailChartMeta.textContent = '가로: ' + meta.xLabel + ' · 세로: ' + meta.yLabel +
+      ' · 간격: ' + meta.interval + ' · ' + meta.hint;
+  }
+
+  return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' +
+         escapeHTML(meta.hint + ' 종가 추이') + '">' + grid +
          '<polyline points="' + coords + '" fill="none" stroke="' + stroke +
          '" stroke-width="1.5" stroke-linejoin="round" /></svg>';
 }
